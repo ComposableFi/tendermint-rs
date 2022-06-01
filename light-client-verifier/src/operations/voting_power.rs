@@ -1,19 +1,24 @@
 //! Provides an interface and default implementation for the `VotingPower` operation
 
-use crate::prelude::*;
+use alloc::collections::BTreeSet as HashSet;
+use core::{convert::TryFrom, fmt};
+use core::marker::PhantomData;
+
+use serde::{Deserialize, Serialize};
+use tendermint::{
+    block::CommitSig,
+    trust_threshold::TrustThreshold as _,
+    vote::{SignedVote, ValidatorIndex, Vote},
+    PublicKey,
+};
+
 use crate::{
     errors::VerificationError,
+    host_functions::HostFunctionsProvider,
+    prelude::*,
     types::{Commit, SignedHeader, TrustThreshold, ValidatorSet},
 };
 
-use alloc::collections::BTreeSet as HashSet;
-use core::fmt;
-use serde::{Deserialize, Serialize};
-
-use core::convert::TryFrom;
-use tendermint::block::CommitSig;
-use tendermint::trust_threshold::TrustThreshold as _;
-use tendermint::vote::{SignedVote, ValidatorIndex, Vote};
 
 /// Tally for the voting power computed by the `VotingPowerCalculator`
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, Eq)]
@@ -39,7 +44,7 @@ impl fmt::Display for VotingPowerTally {
 /// Computes the voting power in a commit against a validator set.
 ///
 /// This trait provides default implementation of some helper functions.
-pub trait VotingPowerCalculator: Send + Sync {
+pub trait VotingPowerCalculator<H: HostFunctionsProvider>: Send + Sync {
     /// Compute the total voting power in a validator set
     fn total_power_of(&self, validator_set: &ValidatorSet) -> u64 {
         validator_set
@@ -100,9 +105,9 @@ pub trait VotingPowerCalculator: Send + Sync {
 
 /// Default implementation of a `VotingPowerCalculator`
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct ProdVotingPowerCalculator;
+pub struct ProdVotingPowerCalculator<H: HostFunctionsProvider>(PhantomData<H>);
 
-impl VotingPowerCalculator for ProdVotingPowerCalculator {
+impl<H: HostFunctionsProvider> VotingPowerCalculator<H> for ProdVotingPowerCalculator<H> {
     fn voting_power_in(
         &self,
         signed_header: &SignedHeader,
@@ -145,10 +150,11 @@ impl VotingPowerCalculator for ProdVotingPowerCalculator {
 
             // Check vote is valid
             let sign_bytes = signed_vote.sign_bytes();
-            if validator
-                .verify_signature(&sign_bytes, signed_vote.signature())
-                .is_err()
-            {
+            if !verify_signature::<H>(
+                validator.pub_key,
+                &sign_bytes,
+                signed_vote.signature().as_bytes(),
+            ) {
                 return Err(VerificationError::invalid_signature(
                     signed_vote.signature().as_bytes().to_vec(),
                     Box::new(validator),
@@ -175,6 +181,29 @@ impl VotingPowerCalculator for ProdVotingPowerCalculator {
         };
 
         Ok(voting_power)
+    }
+}
+
+fn verify_signature<H: HostFunctionsProvider>(
+    pubkey: PublicKey,
+    message: &[u8],
+    signature: &[u8],
+) -> bool {
+    match pubkey {
+        PublicKey::Ed25519(pk) => H::ed25519_verify(signature, message, pk.as_ref()),
+        /// TODO: secp256k1
+        #[cfg(feature = "secp256k1")]
+        PublicKey::Secp256k1(pk) => match k256::ecdsa::Signature::try_from(signature.as_bytes()) {
+            Ok(sig) => pk.verify(msg, &sig).map_err(|_| {
+                Error::signature_invalid("Secp256k1 signature verification failed".to_string())
+            }),
+            Err(e) => Err(Error::signature_invalid(format!(
+                "invalid Secp256k1 signature: {}",
+                e
+            ))),
+        },
+
+        _ =>  unreachable!()
     }
 }
 

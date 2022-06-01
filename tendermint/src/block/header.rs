@@ -161,35 +161,34 @@ impl From<Header> for RawHeader {
 }
 
 impl Header {
-    /// Hash this header
-    pub fn hash(&self) -> Hash {
+    /// Serialize the header to the preimage bytes
+    pub fn serialize_to_preimage(&self) -> Vec<Vec<u8>> {
         // Note that if there is an encoding problem this will
         // panic (as the golang code would):
         // https://github.com/tendermint/tendermint/blob/134fe2896275bb926b49743c1e25493f6b24cc31/types/block.go#L393
         // https://github.com/tendermint/tendermint/blob/134fe2896275bb926b49743c1e25493f6b24cc31/types/encoding_helper.go#L9:6
 
-        let fields_bytes = vec![
+        vec![
             self.version.encode_vec().unwrap(),
             self.chain_id.encode_vec().unwrap(),
             self.height.encode_vec().unwrap(),
             self.time.encode_vec().unwrap(),
             self.last_block_id.unwrap_or_default().encode_vec().unwrap(),
-            self.last_commit_hash
-                .unwrap_or_default()
-                .encode_vec()
-                .unwrap(),
+            self.last_commit_hash.unwrap_or_default().encode_vec().unwrap(),
             self.data_hash.unwrap_or_default().encode_vec().unwrap(),
             self.validators_hash.encode_vec().unwrap(),
             self.next_validators_hash.encode_vec().unwrap(),
             self.consensus_hash.encode_vec().unwrap(),
             self.app_hash.encode_vec().unwrap(),
-            self.last_results_hash
-                .unwrap_or_default()
-                .encode_vec()
-                .unwrap(),
+            self.last_results_hash.unwrap_or_default().encode_vec().unwrap(),
             self.evidence_hash.unwrap_or_default().encode_vec().unwrap(),
             self.proposer_address.encode_vec().unwrap(),
-        ];
+        ]
+    }
+
+    /// Hash this header
+    pub fn hash(&self) -> Hash {
+        let fields_bytes = self.serialize_to_preimage();
 
         Hash::Sha256(simple_hash_from_byte_vectors(fields_bytes))
     }

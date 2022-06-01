@@ -1,19 +1,20 @@
 //! Provides an interface and default implementation of the `Verifier` component
 
-use crate::errors::{ErrorExt, VerificationError, VerificationErrorDetail};
-use crate::operations::voting_power::VotingPowerTally;
-use crate::predicates as preds;
-use crate::types::{TrustedBlockState, UntrustedBlockState};
+use core::marker::PhantomData;
+
+use crate::{predicates::{ProdPredicates, VerificationPredicates}, types::{UntrustedBlockState, TrustedBlockState}};
+use serde::{Deserialize, Serialize};
+
 use crate::{
+    errors::{ErrorExt, VerificationError, VerificationErrorDetail},
+    host_functions::HostFunctionsProvider,
     operations::{
-        CommitValidator, Hasher, ProdCommitValidator, ProdHasher, ProdVotingPowerCalculator,
-        VotingPowerCalculator,
+        voting_power::VotingPowerTally, CommitValidator, ProdCommitValidator,
+        ProdVotingPowerCalculator, VotingPowerCalculator,
     },
     options::Options,
     types::Time,
 };
-use preds::{ProdPredicates, VerificationPredicates};
-use serde::{Deserialize, Serialize};
 
 /// Represents the result of the verification performed by the
 /// verifier component.
@@ -76,7 +77,7 @@ pub struct PredicateVerifier<P, C, V, H> {
     predicates: P,
     voting_power_calculator: C,
     commit_validator: V,
-    hasher: H,
+    phantom: PhantomData<H>,
 }
 
 impl<P, C, V, H> Default for PredicateVerifier<P, C, V, H>
@@ -91,35 +92,35 @@ where
             predicates: P::default(),
             voting_power_calculator: C::default(),
             commit_validator: V::default(),
-            hasher: H::default(),
+            phantom: PhantomData::<H>,
         }
     }
 }
 
 impl<P, C, V, H> PredicateVerifier<P, C, V, H>
 where
-    P: VerificationPredicates,
-    C: VotingPowerCalculator,
+    P: VerificationPredicates<H>,
+    C: VotingPowerCalculator<H>,
     V: CommitValidator,
-    H: Hasher,
+    H: HostFunctionsProvider,
 {
     /// Constructor.
-    pub fn new(predicates: P, voting_power_calculator: C, commit_validator: V, hasher: H) -> Self {
+    pub fn new(predicates: P, voting_power_calculator: C, commit_validator: V) -> Self {
         Self {
             predicates,
             voting_power_calculator,
             commit_validator,
-            hasher,
+            phantom: PhantomData::<H>,
         }
     }
 }
 
 impl<P, C, V, H> Verifier for PredicateVerifier<P, C, V, H>
 where
-    P: VerificationPredicates,
-    C: VotingPowerCalculator,
+    P: VerificationPredicates<H>,
+    C: VotingPowerCalculator<H>,
     V: CommitValidator,
-    H: Hasher,
+    H: HostFunctionsProvider,
 {
     /// Validate the given light block state.
     ///
@@ -160,7 +161,6 @@ where
         verdict!(self.predicates.validator_sets_match(
             untrusted.validators,
             untrusted.signed_header.header.validators_hash,
-            &self.hasher,
         ));
 
         // TODO(thane): Is this check necessary for IBC?
@@ -169,7 +169,6 @@ where
             verdict!(self.predicates.next_validators_match(
                 untrusted_next_validators,
                 untrusted.signed_header.header.next_validators_hash,
-                &self.hasher,
             ));
         }
 
@@ -177,7 +176,6 @@ where
         verdict!(self.predicates.header_matches_commit(
             &untrusted.signed_header.header,
             untrusted.signed_header.commit.block_id.hash,
-            &self.hasher,
         ));
 
         // Additional implementation specific validation
@@ -230,5 +228,5 @@ where
 }
 
 /// The default production implementation of the [`PredicateVerifier`].
-pub type ProdVerifier =
-    PredicateVerifier<ProdPredicates, ProdVotingPowerCalculator, ProdCommitValidator, ProdHasher>;
+pub type ProdVerifier<H> =
+    PredicateVerifier<ProdPredicates<H>, ProdVotingPowerCalculator<H>, ProdCommitValidator<H>, H>;
