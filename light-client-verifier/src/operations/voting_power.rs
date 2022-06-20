@@ -250,8 +250,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::{
-        errors::VerificationErrorDetail, host_functions::TestHostFunctions, types::LightBlock,
+    use crate::{ host_functions::host_functions_manager::HostFunctionsManager,
     };
 
     const EXPECTED_RESULT: VotingPowerTally = VotingPowerTally {

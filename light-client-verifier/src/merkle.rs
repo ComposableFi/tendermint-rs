@@ -75,7 +75,7 @@ fn inner_hash<H: HostFunctionsProvider>(left: &[u8], right: &[u8]) -> Hash {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host_functions::TestHostFunctions; // TODO: use non-subtle ?
+    use crate::host_functions::host_functions_manager::HostFunctionsManager; // TODO: use non-subtle ?
 
     #[test]
     fn test_get_split_point() {

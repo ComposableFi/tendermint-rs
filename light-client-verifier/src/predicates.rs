@@ -222,14 +222,10 @@ mod tests {
     use crate::prelude::*;
     use crate::{
         errors::{VerificationError, VerificationErrorDetail},
-        host_functions::TestHostFunctions,
         operations::{ProdCommitValidator, ProdVotingPowerCalculator, VotingPowerTally},
         predicates::{ProdPredicates, VerificationPredicates},
     };
 
-    use crate::operations::{
-        Hasher, ProdCommitValidator, ProdHasher, ProdVotingPowerCalculator, VotingPowerTally,
-    };
     use crate::types::{LightBlock, TrustThreshold};
 
     impl From<TmLightBlock> for LightBlock {
