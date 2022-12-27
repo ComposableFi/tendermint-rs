@@ -35,4 +35,5 @@ pub use tendermint_light_client_verifier as verifier;
 pub use verifier::{operations, predicates, types};
 
 #[doc(hidden)]
+#[cfg(test)]
 pub mod tests;
